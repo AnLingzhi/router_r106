@@ -1,0 +1,10 @@
+{
+  "domain": "router_r106",
+  "name": "Router R106",
+  "version": "1.0.0",
+  "documentation": "https://example.com",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": ["@your_github_username"]
+}
+
