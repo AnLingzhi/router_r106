@@ -32,7 +32,8 @@ class RouterAPI:
         self._username = username
         self._password = password
         self._session = requests.Session()
-
+        self._login_status = False
+	
     def hex_hmac_md5(self, key, data):
         return hmac.new(key.encode(), data.encode(), hashlib.md5).hexdigest()
 
@@ -48,9 +49,11 @@ class RouterAPI:
             response = self._session.post(url, headers=headers, json=data, timeout=5)
             response.raise_for_status()
             self._session.cookies = response.cookies
+            self._login_status = True
             return True
         except requests.RequestException as e:
             _LOGGER.error("Router login failed: %s", e)
+            self._login_status = False
             return False
 
     def reboot_router(self):
@@ -64,6 +67,9 @@ class RouterAPI:
 
     def get_status(self):
         """获取路由器状态"""
+        if not self._login_status:
+            if not self.login():
+                return {}
         url = f"{ROUTER_URL}/action/get_mgdb_params"
         data = {
             "keys": [
@@ -80,6 +86,7 @@ class RouterAPI:
             return response.json().get("data", {})
         except requests.RequestException as e:
             _LOGGER.error("Failed to fetch router status: %s", e)
+            self._login_status = False
             return {}
 
 class RouterBatterySensor(SensorEntity):
