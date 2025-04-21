@@ -1,0 +1,8 @@
+sensor:
+  - platform: router_r106
+    testurl: "mi.com"
+    r106_url: "http://192.168.1.1"
+    r106_username: "admin"
+    r106_password: "admin"
+    jdc_url: "http://192.168.68.1"
+    jdc_password: "zhiyao998"
