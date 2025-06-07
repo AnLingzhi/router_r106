@@ -8,30 +8,37 @@ from datetime import timedelta, datetime
 import voluptuous as vol
 
 from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
-from homeassistant.const import CONF_USERNAME, CONF_PASSWORD
+from homeassistant.const import CONF_USERNAME, CONF_PASSWORD, CONF_PROXY, CONF_URL
 import homeassistant.helpers.config_validation as cv
 from homeassistant.util import Throttle
 
 _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(minutes=1)
-ROUTER_URL = "http://192.168.1.1"
 
 CONF_TESTURL = "testurl"
+CONF_ROUTER_URL = CONF_URL # Reusing CONF_URL from const for router URL
 DEFAULT_TESTURL = "mi.com"
+# DEFAULT_PROXY = "http://172.17.13.165:7890" # No longer a hardcoded default in code logic
+DEFAULT_ROUTER_URL = "http://192.168.1.1"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_USERNAME): cv.string,
     vol.Required(CONF_PASSWORD): cv.string,
     vol.Optional(CONF_TESTURL, default=DEFAULT_TESTURL): cv.string,
+    vol.Optional(CONF_PROXY, default=""): cv.string, # Default to empty string, meaning no proxy if not set
+    vol.Optional(CONF_ROUTER_URL, default=DEFAULT_ROUTER_URL): cv.string,
 })
 
 class RouterAPI:
     """路由器 API 处理登录和数据获取"""
-    def __init__(self, username, password):
+    def __init__(self, username, password, router_url, proxy_url=None):
         self._username = username
         self._password = password
+        self._router_url = router_url
         self._session = requests.Session()
+        if proxy_url:
+            self._session.proxies = {"http": proxy_url, "https": proxy_url}
         self._login_status = False
 	
     def hex_hmac_md5(self, key, data):
@@ -39,7 +46,7 @@ class RouterAPI:
 
     def login(self):
         """登录路由器"""
-        url = f"{ROUTER_URL}/goform/login"
+        url = f"{self._router_url}/goform/login"
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         username_hmac = self.hex_hmac_md5("0123456789", self._username)
         password_hmac = self.hex_hmac_md5("0123456789", self._password)
@@ -57,7 +64,7 @@ class RouterAPI:
             return False
 
     def reboot_router(self):
-        url = f"{ROUTER_URL}/action/reboot"
+        url = f"{self._router_url}/action/reboot"
         try:
             response = self._session.post(url)
             response.raise_for_status()
@@ -70,7 +77,7 @@ class RouterAPI:
         if not self._login_status:
             if not self.login():
                 return {}
-        url = f"{ROUTER_URL}/action/get_mgdb_params"
+        url = f"{self._router_url}/action/get_mgdb_params"
         data = {
             "keys": [
                 "device_battery_level_percent", "device_battery_temperature",
@@ -187,12 +194,13 @@ class NetworkProberSensor(SensorEntity):
     _attr_device_class = "connectivity"
     _attr_state_class = "measurement"
 
-    def __init__(self, test_url):
+    def __init__(self, test_url, proxy_url=None):
         self._test_url = test_url if test_url.startswith("http") else f"http://{test_url}"
         self._connected = 0
         self._dalay = -1
         self._last_probe_error = None
         self._attributes = {}
+        self._proxy_url = proxy_url
 
     @property
     def state(self):
@@ -205,9 +213,10 @@ class NetworkProberSensor(SensorEntity):
     @Throttle(SCAN_INTERVAL)
     def update(self):
         print(self._test_url)
+        proxies = {"http": self._proxy_url, "https": self._proxy_url} if self._proxy_url else None
         try:
             start_time = time.time()
-            response = requests.get(self._test_url, timeout=5)
+            response = requests.get(self._test_url, timeout=5, proxies=proxies)
             response.raise_for_status()
             self._dalay = round((time.time() - start_time) * 1000, 2)  # 毫秒
             self._last_probe_error = None
@@ -249,8 +258,10 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     username = config[CONF_USERNAME]
     password = config[CONF_PASSWORD]
     test_url = config[CONF_TESTURL]
+    proxy_url = config.get(CONF_PROXY) # 使用 .get 以允许 proxy_url 为 None
+    router_url = config[CONF_ROUTER_URL]
     
-    router_api = RouterAPI(username, password)
+    router_api = RouterAPI(username, password, router_url, proxy_url)
     
     if not router_api.login():
         _LOGGER.error("Router login failed, sensors will not be created")
@@ -264,6 +275,6 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         RouterBatteryTempSensor(router_api),
         RouterNetworkSensor(router_api),
         RouterExtraSensor(router_api),
-        NetworkProberSensor(test_url),
+        NetworkProberSensor(test_url, proxy_url),
         control_entity, # 将 RouterControlEntity 添加到实体列表
     ], True)
