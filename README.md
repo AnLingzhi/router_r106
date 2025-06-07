@@ -9,6 +9,8 @@
 *   监控路由器网络信号强度
 *   显示路由器额外信息（如网络模式、运营商、漫游状态等）
 *   支持通过 HTTP/HTTPS 代理进行所有网络请求
+*   监控当前活动的 SIM 卡槽
+*   提供服务以切换活动的 SIM 卡槽 (支持卡槽 "1" 和 "2")
 
 ## 安装
 
@@ -60,7 +62,27 @@ sensor:
 *   `sensor.router_battery_temperature`: 路由器电池温度 (°C)
 *   `sensor.router_network_signal_level`: 路由器网络信号强度 (dB)
 *   `sensor.router_extra_info`: 路由器额外信息 (状态为网络模式，属性包含运营商、漫游状态等)
+*   `sensor.router_sim_slot`: 当前活动的 SIM 卡槽 (例如 "1" 或 "2")
 *   `sensor.router_control`: 用于发送控制命令的实体（例如重启）。
+
+## 服务
+
+### `router_r106.set_sim_slot`
+
+用于设置路由器活动的 SIM 卡槽。
+
+**服务数据:**
+
+| 参数        | 描述                                   | 示例    |
+|-------------|----------------------------------------|---------|
+| `slot_id`   | (必需) 要激活的 SIM 卡槽ID。必须是 "1" 或 "2"。 | `"1"`   |
+
+**示例 YAML 调用:**
+```yaml
+service: router_r106.set_sim_slot
+data:
+  slot_id: "2"
+```
 
 ## 注意事项
 
