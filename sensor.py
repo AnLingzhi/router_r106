@@ -16,16 +16,13 @@ _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(minutes=1)
 
-CONF_TESTURL = "testurl"
 CONF_ROUTER_URL = CONF_URL # Reusing CONF_URL from const for router URL
-DEFAULT_TESTURL = "mi.com"
 # DEFAULT_PROXY = "http://172.17.13.165:7890" # No longer a hardcoded default in code logic
 DEFAULT_ROUTER_URL = "http://192.168.1.1"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_USERNAME): cv.string,
     vol.Required(CONF_PASSWORD): cv.string,
-    vol.Optional(CONF_TESTURL, default=DEFAULT_TESTURL): cv.string,
     vol.Optional(CONF_PROXY, default=""): cv.string, # Default to empty string, meaning no proxy if not set
     vol.Optional(CONF_ROUTER_URL, default=DEFAULT_ROUTER_URL): cv.string,
 })
@@ -187,50 +184,6 @@ class RouterExtraSensor(SensorEntity):
             "firmware_status": status.get("fota_curr_istatus")
         }
 
-class NetworkProberSensor(SensorEntity):
-    """网络探测传感器"""
-    _attr_name = "Router Network Prober"
-    _attr_unit_of_measurement = "ms"
-    _attr_device_class = "connectivity"
-    _attr_state_class = "measurement"
-
-    def __init__(self, test_url, proxy_url=None):
-        self._test_url = test_url if test_url.startswith("http") else f"http://{test_url}"
-        self._connected = 0
-        self._dalay = -1
-        self._last_probe_error = None
-        self._attributes = {}
-        self._proxy_url = proxy_url
-
-    @property
-    def state(self):
-        return self._dalay
-
-    @property
-    def extra_state_attributes(self):
-        return self._attributes
-
-    @Throttle(SCAN_INTERVAL)
-    def update(self):
-        print(self._test_url)
-        proxies = {"http": self._proxy_url, "https": self._proxy_url} if self._proxy_url else None
-        try:
-            start_time = time.time()
-            response = requests.get(self._test_url, timeout=5, proxies=proxies)
-            response.raise_for_status()
-            self._dalay = round((time.time() - start_time) * 1000, 2)  # 毫秒
-            self._last_probe_error = None
-            self._connected = 1
-        except requests.RequestException as e:
-            self._connected = 0
-            self._dalay = -1
-            self._last_probe_error = str(e)
-        self._attributes = {
-            "connected": self._connected,
-            "last_error": self._last_probe_error,
-            "last_probe": datetime.now().isoformat(),
-            "test_url": self._test_url
-        }
 
 class RouterControlEntity(SensorEntity): # 继承 SensorEntity 是为了方便添加到 entities 列表中，实际上它不一定是一个传感器
     """路由器控制实体，用于处理重启等控制命令"""
@@ -257,7 +210,6 @@ class RouterControlEntity(SensorEntity): # 继承 SensorEntity 是为了方便�
 def setup_platform(hass, config, add_entities, discovery_info=None):
     username = config[CONF_USERNAME]
     password = config[CONF_PASSWORD]
-    test_url = config[CONF_TESTURL]
     proxy_url = config.get(CONF_PROXY) # 使用 .get 以允许 proxy_url 为 None
     router_url = config[CONF_ROUTER_URL]
     
@@ -275,6 +227,5 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         RouterBatteryTempSensor(router_api),
         RouterNetworkSensor(router_api),
         RouterExtraSensor(router_api),
-        NetworkProberSensor(test_url, proxy_url),
         control_entity, # 将 RouterControlEntity 添加到实体列表
     ], True)

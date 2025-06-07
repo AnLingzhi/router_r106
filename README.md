@@ -1,6 +1,6 @@
-# Home Assistant 路由器监控与网络探测集成
+# Home Assistant 路由器监控集成
 
-这是一个 Home Assistant 自定义集成，用于监控特定型号路由器的状态（如电池电量、温度、网络信号）并通过网络探测来检查互联网连接质量。
+这是一个 Home Assistant 自定义集成，用于监控特定型号路由器的状态（如电池电量、温度、网络信号等）。
 
 ## 功能
 
@@ -8,7 +8,6 @@
 *   监控路由器电池温度
 *   监控路由器网络信号强度
 *   显示路由器额外信息（如网络模式、运营商、漫游状态等）
-*   通过 ping 指定 URL 来探测网络延迟和连接状态
 *   支持通过 HTTP/HTTPS 代理进行所有网络请求
 
 ## 安装
@@ -42,7 +41,6 @@ sensor:
     username: "YOUR_ROUTER_USERNAME"
     password: "YOUR_ROUTER_PASSWORD"
     url: "http://192.168.1.1" # 可选，路由器的管理界面 URL，默认为 "http://192.168.1.1"
-    testurl: "mi.com"  # 可选，用于网络探测的目标 URL，默认为 "mi.com"
     proxy: "" # 可选，指定代理服务器地址。如果留空或省略此行，则不使用代理。示例: "http://your_proxy_ip:port"
 ```
 
@@ -52,7 +50,6 @@ sensor:
 *   `username`: (必需) 您路由器的登录用户名。
 *   `password`: (必需) 您路由器的登录密码。
 *   `url`: (可选) 您路由器的管理界面 URL。默认值为 `http://192.168.1.1`。
-*   `testurl`: (可选) 用于网络探测传感器的目标 URL。默认值为 `mi.com`。
 *   `proxy`: (可选) 指定用于所有出站 HTTP/HTTPS 请求的代理服务器。格式为 `http://<proxy_ip>:<proxy_port>` 或 `https://<proxy_ip>:<proxy_port>`。如果您的网络不需要代理，请将此参数值设置为空字符串 (`""`) 或直接省略此行。如果未配置，则默认不使用任何代理。
 
 ## 提供的传感器
@@ -63,7 +60,6 @@ sensor:
 *   `sensor.router_battery_temperature`: 路由器电池温度 (°C)
 *   `sensor.router_network_signal_level`: 路由器网络信号强度 (dB)
 *   `sensor.router_extra_info`: 路由器额外信息 (状态为网络模式，属性包含运营商、漫游状态等)
-*   `sensor.router_network_prober`: 网络探测延迟 (ms)，属性包含连接状态和上次错误信息。
 *   `sensor.router_control`: 用于发送控制命令的实体（例如重启）。
 
 ## 注意事项
