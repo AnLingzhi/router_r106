@@ -380,12 +380,20 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
         router_api = RouterAPI(username, password, router_url, proxy_url)
         
-        _LOGGER.debug("router_r106: Attempting router login in setup_platform...")
-        if not router_api.login():
-            _LOGGER.error("router_r106: Router login failed during setup. Sensors will not be created.")
-            return False # Explicitly return False on login failure
+        _LOGGER.debug("router_r106: Attempting initial router login in setup_platform...")
+        initial_login_success = router_api.login() # Store login result
 
-        _LOGGER.debug("router_r106: Router login successful in setup_platform. Creating entities.")
+        if not initial_login_success:
+            _LOGGER.warning(
+                "router_r106: Initial router login failed during setup. "
+                "Integration will load, and sensors will attempt to connect on their first update."
+            )
+        else:
+            _LOGGER.info("router_r106: Initial router login successful during setup.")
+
+        # Regardless of initial login, proceed to create entities.
+        # The entities' update methods will handle login status and data fetching.
+        _LOGGER.debug("router_r106: Proceeding to create entities.")
         
         control_entity = RouterControlEntity(router_api)
 
