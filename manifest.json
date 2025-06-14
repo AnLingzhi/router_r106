@@ -7,6 +7,7 @@
   "dependencies": [],
   "codeowners": ["@your_github_username"],
   "config_flow": true,
-  "iot_class": "local_polling"
+  "iot_class": "local_polling",
+  "platforms": ["sensor", "button", "select", "switch"]
 }
 

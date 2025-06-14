@@ -6,7 +6,7 @@ from homeassistant.const import CONF_USERNAME, CONF_PASSWORD, CONF_URL
 from homeassistant.core import callback
 
 from .const import DOMAIN
-from .sensor import RouterAPI  # Assuming RouterAPI is in sensor.py
+from .api import RouterAPI
 
 _LOGGER = logging.getLogger(__name__)
 
