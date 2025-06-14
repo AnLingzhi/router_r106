@@ -31,6 +31,13 @@ SERVICE_SET_SIM_SLOT_SCHEMA = vol.Schema({
     vol.Required(ATTR_SLOT_ID): vol.All(cv.string, vol.In(["1", "2"])),
 })
 
+# Service constants for charge control
+SERVICE_SET_CHARGE_STATE = "set_charge_state"
+ATTR_CHARGE_STATE = "charge_state"
+
+SERVICE_SET_CHARGE_STATE_SCHEMA = vol.Schema({
+    vol.Required(ATTR_CHARGE_STATE): cv.boolean,
+})
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_USERNAME): cv.string,
@@ -192,6 +199,91 @@ class RouterAPI:
             return False
         except Exception as e_gen:
             _LOGGER.exception(f"router_r106: Unexpected error during set_mnet_sim_slot: {e_gen}")
+            return False
+
+    def set_charge_state(self, charge_state: bool):
+        """设置充电状态"""
+        _LOGGER.debug(f"router_r106: set_charge_state called with charge_state: {charge_state}")
+        
+        # 从 self._router_url 解析主机名，并使用新的端口和路径
+        from urllib.parse import urlparse
+        parsed_router_url = urlparse(self._router_url)
+        # 假设 self._router_url 是类似 "http://192.168.1.1" 或 "http://your.router.domain"
+        # 新的 URL 将是 "http://<hostname_from_self._router_url>:8080/api/set/charge/state"
+        # 如果 self._router_url 包含端口，需要移除它，然后添加新的端口。
+        # urlparse(self._router_url).hostname 会给出纯主机名。
+        
+        scheme = parsed_router_url.scheme
+        hostname = parsed_router_url.hostname
+        # 如果原始URL中包含端口，urlparse().netloc 会是 "hostname:port"
+        # 我们只需要 hostname 部分来构建新的 URL
+        
+        url = f"{scheme}://{hostname}:8080/api/set/charge/state"
+        
+        _LOGGER.debug(f"router_r106: Constructed charge API URL: {url}")
+
+        headers = {
+            'Accept': '*/*',
+            'Accept-Language': 'zh,zh-CN;q=0.9',
+            'Content-Type': 'application/json',
+            'DNT': '1', # 根据 curl 命令
+            'Proxy-Connection': 'keep-alive', # 根据 curl 命令
+        }
+        # 如果需要 session cookies，需要确保它们已设置或在此处传递
+        # 对于这个特定的API，它可能不需要之前登录的cookies，因为它是一个不同的域和端口
+        
+        data = {"CHARGE_STATE": charge_state}
+        _LOGGER.debug(f"router_r106: Setting charge state to {charge_state} at {url}")
+        
+        # 使用一个新的 requests session 或全局的 requests，因为代理和认证可能不同
+        # 这里我们暂时不使用 self._session，除非确认需要共享 cookies 或代理设置
+        try:
+            # response = requests.post(url, headers=headers, json=data, timeout=10, verify=False) # verify=False for --insecure
+            # 为了与现有代码风格保持一致，并且如果这个API也需要通过代理，我们还是用 self._session
+            # 但要注意，这个API的URL是 http://route.tesla.alz:8080，与路由器的 self._router_url 不同
+            # 如果这个API不需要代理，或者需要不同的代理，那么应该使用独立的 requests.post
+            # 假设这个API也可能需要通过配置的代理 (虽然curl命令中没有体现)
+            # 如果确定不需要代理，或者代理会干扰，应该用 requests.post(...)
+            
+            # 修正：由于URL和潜在的认证机制不同，使用独立的requests调用更安全
+            # 并且，用户提供的 curl 有 --insecure，意味着 SSL 验证应被禁用 (如果URL是HTTPS)
+            # 当前URL是HTTP，所以 verify=False 不是严格必需的，但加上无害。
+            
+            # 重新评估：如果这个API是路由器本身提供的另一个端点，只是端口不同，
+            # 那么使用 self._session 可能是合适的，特别是如果它依赖于登录会话。
+            # 但 "route.tesla.alz" 看起来不像一个标准路由器地址。
+            # 假设它是一个独立的API，不需要共享session的cookies或特定代理。
+            
+            # 使用 requests.post 直接调用，不依赖 self._session，因为目标主机和端口不同
+            # 并且用户提供的 curl 中没有认证信息，暗示可能不需要登录 session
+            # 如果代理适用于所有出站请求，则需要考虑。但这里我们先直接请求。
+            
+            # 最终决定：为了简单起见，并遵循用户提供的 curl，我们将直接使用 requests.post
+            # 不使用 self._session，因为目标服务不同。
+            # 如果需要代理，用户必须确保其系统级代理或Python环境配置正确，
+            # 或者我们在配置中为此特定API提供单独的代理设置。
+            # 目前，我们不从 self._session.proxies 应用代理。
+            # 更正：根据用户反馈，需要使用 self._session 以便应用代理和可能的共享 cookies
+
+            if not self._login_status: # 检查登录状态，如果这个API也需要登录的话
+                _LOGGER.debug("router_r106: Not logged in, attempting login before set_charge_state.")
+                if not self.login():
+                    _LOGGER.error("router_r106: Login failed before set_charge_state. Command not sent.")
+                    return False
+            
+            _LOGGER.info(f"router_r106: Sending request to {url} via self._session with data: {data} and headers: {headers}")
+            # 使用 self._session.post 并传入 verify=False
+            response = self._session.post(url, headers=headers, json=data, timeout=10, verify=False) # verify=False for --insecure
+
+            _LOGGER.debug(f"router_r106: set_charge_state response status: {response.status_code}")
+            response.raise_for_status() # 检查HTTP错误
+            _LOGGER.info(f"router_r106: Command to set charge state to {charge_state} sent successfully.")
+            return True
+        except requests.RequestException as e:
+            _LOGGER.error(f"router_r106: Failed to set charge state with RequestException: {e}")
+            return False
+        except Exception as e_gen:
+            _LOGGER.exception(f"router_r106: Unexpected error during set_charge_state: {e_gen}")
             return False
 
 class RouterBatterySensor(SensorEntity):
@@ -360,6 +452,15 @@ class RouterControlEntity(SensorEntity): # 继承 SensorEntity 是为了方便�
         else:
             _LOGGER.error(f"router_r106: SIM slot set command to {slot_id} failed.")
 
+    async def async_set_charge_state(self, charge_state: bool):
+        """Service call to set the charge state."""
+        _LOGGER.info(f"router_r106: Service async_set_charge_state called with charge_state: {charge_state}")
+        # 注意：这里的 set_charge_state 是一个同步方法，在 executor 中运行
+        success = await self.hass.async_add_executor_job(self._router_api.set_charge_state, charge_state)
+        if success:
+            _LOGGER.info(f"router_r106: Charge state set command to {charge_state} was successful.")
+        else:
+            _LOGGER.error(f"router_r106: Charge state set command to {charge_state} failed.")
 
     @property
     def state(self):
@@ -425,8 +526,26 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
             async_handle_set_sim_slot,
             SERVICE_SET_SIM_SLOT_SCHEMA, # Pass schema directly
         )
-        
         _LOGGER.info(f"router_r106: Service {DOMAIN}.{SERVICE_SET_SIM_SLOT} registration scheduled.")
+
+        # Register set_charge_state service
+        async def async_handle_set_charge_state(call):
+            """Handle the service call to set_charge_state."""
+            charge_state = call.data.get(ATTR_CHARGE_STATE)
+            _LOGGER.debug(f"router_r106: async_handle_set_charge_state called with charge_state: {charge_state}")
+            # Assuming control_entity is the correct entity to handle this.
+            # If charge control is independent or managed differently, adjust target.
+            await control_entity.async_set_charge_state(charge_state)
+
+        hass.loop.call_soon_threadsafe(
+            hass.services.async_register,
+            DOMAIN,
+            SERVICE_SET_CHARGE_STATE,
+            async_handle_set_charge_state,
+            SERVICE_SET_CHARGE_STATE_SCHEMA,
+        )
+        _LOGGER.info(f"router_r106: Service {DOMAIN}.{SERVICE_SET_CHARGE_STATE} registration scheduled.")
+        
         _LOGGER.info("router_r106: Setup complete.")
         return True # Explicitly return True for successful setup
     except Exception as e:
